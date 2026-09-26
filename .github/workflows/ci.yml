@@ -45,21 +45,19 @@ jobs:
         run: |
           set -e
 
-          forbidden_files=(
-            ".env"
-            ".env.local"
-            ".env.production"
-            ".env.development"
-          )
+          forbidden_pattern='(^|/)\.env(\.local|\.production|\.development)?$|(^|/).+\.(pem|key|p12|pfx)$'
 
-          for file in "${forbidden_files[@]}"; do
-            if [ -f "$file" ]; then
-              echo "Forbidden environment file detected: $file"
-              exit 1
-            fi
-          done
+          if git ls-files | grep -E "$forbidden_pattern"; then
+            echo "Forbidden environment or private-key file detected in the repository."
+            exit 1
+          fi
 
-          echo "No forbidden environment files detected."
+          if git grep -nI -E -- '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----'; then
+            echo "Private-key material detected in tracked file contents."
+            exit 1
+          fi
+
+          echo "No forbidden environment or private-key material detected."
 
       - name: Detect project type
         shell: bash
@@ -83,16 +81,16 @@ jobs:
 
       - name: Lint
         if: ${{ hashFiles('package.json') != '' }}
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Type check
         if: ${{ hashFiles('package.json') != '' }}
-        run: npm run typecheck --if-present
+        run: npm run typecheck
 
       - name: Test
         if: ${{ hashFiles('package.json') != '' }}
-        run: npm test --if-present
+        run: npm test
 
       - name: Build
         if: ${{ hashFiles('package.json') != '' }}
-        run: npm run build --if-present
+        run: npm run build
