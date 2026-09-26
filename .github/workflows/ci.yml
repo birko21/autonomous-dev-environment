@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  repository-checks:
+    name: Repository Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify required governance files
+        shell: bash
+        run: |
+          set -e
+
+          required_files=(
+            "AGENTS.md"
+            "DEFINITION_OF_DONE.md"
+            "SECURITY.md"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing required file: $file"
+              exit 1
+            fi
+          done
+
+          echo "Required governance files are present."
+
+      - name: Check for committed environment files
+        shell: bash
+        run: |
+          set -e
+
+          forbidden_files=(
+            ".env"
+            ".env.local"
+            ".env.production"
+            ".env.development"
+          )
+
+          for file in "${forbidden_files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "Forbidden environment file detected: $file"
+              exit 1
+            fi
+          done
+
+          echo "No forbidden environment files detected."
+
+      - name: Detect project type
+        shell: bash
+        run: |
+          if [ -f package.json ]; then
+            echo "Node/TypeScript project detected."
+          else
+            echo "No application project detected yet. Governance-only CI pass."
+          fi
+
+      - name: Install Node.js
+        if: ${{ hashFiles('package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm ci
+
+      - name: Lint
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm run lint --if-present
+
+      - name: Type check
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm run typecheck --if-present
+
+      - name: Test
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm test --if-present
+
+      - name: Build
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm run build --if-present
