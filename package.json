@@ -1,0 +1,30 @@
+{
+  "name": "autonomous-dev-environment",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Safe, resumable, evidence-driven autonomous software-development loop.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "ade": "dist/src/cli.js"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "lint": "node scripts/lint.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.json",
+    "test": "npm run build && node scripts/run-tests.mjs",
+    "test:unit": "npm run build --silent && node scripts/run-tests.mjs unit",
+    "test:integration": "npm run build --silent && node scripts/run-tests.mjs integration",
+    "test:contract": "npm run build --silent && node scripts/run-tests.mjs contract",
+    "test:security": "npm run build --silent && node scripts/run-tests.mjs security",
+    "security": "node scripts/security-check.mjs",
+    "demo": "npm run build && node dist/src/cli.js demo"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.11",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,64 +1,59 @@
-# Architecture: Autonomous Development Environment (Phase 1)
+# Architecture: Safe Autonomous Development Loop
 
-This document defines the minimal, secure architecture for the autonomous development environment, outlining how AI agents interact with the repository, execute tasks, and propose changes safely.
+## Purpose
 
-## 1. Task Intake
-- **Mechanism:** Tasks are represented as Markdown files within the `tickets/` directory (e.g., `tickets/001-phase-1-foundation.md`) or as standard issue tracker tickets.
-- **Workflow:** An AI agent is assigned a task. The agent begins by reading the task document, understanding the context, and reviewing the governance files (`AGENTS.md`, `DEFINITION_OF_DONE.md`, `SECURITY.md`, `CONTRIBUTING.md`).
-- **Security:** Tasks must not contain secrets or sensitive customer data. Task definitions are treated as untrusted input; agents must validate constraints before execution.
+The repository implements a local-first control plane for `TASK_IN → DISPATCH → ACT → CHECK → FINISH`. The architecture separates probabilistic model work from deterministic control so a model cannot grant itself permissions, bypass verification, or merge its own pull request.
 
-## 2. Agent Execution
-- **Mechanism:** Agents operate as ephemeral, stateless processes triggered by task assignment.
-- **Workflow:**
-  1. The agent reads the root governance files to understand rules and boundaries.
-  2. The agent creates a dedicated feature branch with an appropriate prefix (e.g., `feature/`, `fix/`, `docs/`, `audit/`).
-  3. The agent implements the required changes in a minimal, atomic manner.
-- **Security:** Agents have no access to production infrastructure or secrets. They must not bypass branch protections, disable security tooling, or modify governance files without explicit approval.
+## Component map
 
-## 3. Workspace Isolation
-- **Mechanism:** Each agent execution runs within a temporary, isolated local environment or sandbox.
-- **Workflow:** The environment provides access to the repository code and standard development tools (e.g., Node.js, npm, git).
-- **Security:** The workspace contains no production credentials, `.env` files, or API keys. Network access from the workspace should be limited to necessary package registries and version control. Modifications made in the workspace are restricted to the assigned feature branch.
+1. **Task intake and domain (`src/domain`)** — runtime-validated schemas for Task, Ticket, acceptance criteria, worker/tool requests, policy decisions, verification/evidence, escalations, summaries, and completion results.
+2. **Durable state (`src/state`)** — explicit state machine plus atomic `state.json`, append-only `events.ndjson`, and append-only `evidence.ndjson`. Every tool request has an idempotency key and a persisted next-tool cursor.
+3. **Decision and worker providers (`src/providers`)** — a common interface isolates OpenAI/Codex, Google Jules, TypeSafe AI Jev, and mocks.
+4. **Routing (`src/routing`)** — Jev classification selects scope/risk/complexity/worker intent; deterministic rules independently detect mandatory approval categories and route the smallest configured capable worker.
+5. **Tool control (`src/tools`)** — models may request tools, but only registered tools execute. Descriptors declare purpose, read/write/destructive class, permitted paths, network need, timeout, approval requirement, and recovery behavior. A deterministic policy evaluates every request.
+6. **Workspace (`src/workspace`)** — repository snapshots collect file/governance/Git metadata while excluding runtime/build directories.
+7. **Verification (`src/verification`)** — repository integrity, lint, typecheck, unit/integration tests, build, security, changed-file scope, secret/private-key detection, and Git diff validation run as executable checks.
+8. **Evidence (`src/evidence`)** — provider selection, policy decisions, tool results, commands/checks, retries, escalations, latency/cost (when supplied), and summaries are persisted after redaction.
+9. **GitHub (`src/github`)** — source-control operations are isolated behind an adapter. The contract supports inspection, branch creation, changed-file/diff inspection, PR creation, checks, review requests, and escalation metadata; no merge method exists.
+10. **Orchestrator (`src/orchestrator`)** — owns classification, dispatch, approval gates, action, deterministic verification, bounded repair, escalation, completion, cancellation, and recovery.
 
-## 4. Validation and Testing
-- **Mechanism:** Local execution of CI checks prior to proposing changes.
-- **Workflow:** Before finishing a task, the agent must run linting, type-checking, unit tests, and build scripts.
-- **Security:** Agents must not weaken or bypass existing tests or security validations to force a passing result. The Definition of Done requires all checks to pass locally.
+## State model
 
-## 5. Pull-Request Creation and Human Approval
-- **Mechanism:** Agents use `git` to commit changes and standard tools to open Pull Requests against the `main` branch.
-- **Workflow:**
-  1. The agent pushes the feature branch to the repository.
-  2. The agent opens a PR using the required template, detailing what changed, why, testing performed, risks, and follow-ups.
-  3. The PR triggers automated CI checks (e.g., required governance files presence, secret scanning).
-  4. A human reviewer must explicitly approve the PR before merging. Agents are prohibited from merging their own PRs.
-- **Security:** This step enforces the principle of least privilege and separation of duties. High-risk changes (e.g., auth, infrastructure, destructive data ops) require rigorous human scrutiny.
+`RECEIVED → CLASSIFIED → DISPATCHED → RUNNING → VERIFYING → COMPLETED`
 
-## 6. Logging and Failure Handling
-- **Mechanism:** Agents emit logs detailing their actions, tool invocations, and reasoning.
-- **Workflow:**
-  - If a task succeeds, the agent opens a PR and reports completion.
-  - If a task fails, or the agent encounters a security violation or conflict in requirements, the agent stops execution.
-  - The agent documents the failure reason or security concern and flags the task for human review.
-- **Security:** Logs must never expose secrets or sensitive data. Agents must fail safely (fail-closed) rather than attempting unauthorized workarounds.
+Non-happy paths use `AWAITING_APPROVAL`, `RETRYING`, `ESCALATED`, `FAILED`, and `CANCELLED`. Transitions are allowlisted in code. Terminal states cannot be resumed into execution.
 
----
+A process can stop after any persisted state/tool step. `resume` reloads the run, preserved worker response, next tool index, executed idempotency keys, approvals, prior evidence, and verification state.
 
-## Assumptions
-- The primary version control system is Git, and the platform uses a PR-based forge.
-- The repository is the single source of truth for both code and governance rules.
-- Human reviewers are available and responsive for PR approvals and escalation handling.
+## Trust boundaries
 
-## Open Questions
-- How will tasks be systematically assigned to agents (e.g., webhooks on issue creation, manual trigger)?
-- What specific sandbox technology will be used for workspace isolation in future phases (e.g., Docker containers, ephemeral VMs)?
-- Should there be a structured format for agent logs to facilitate automated auditing?
+### Models are allowed to
 
-## Security Risks
-- **Prompt Injection/Malicious Tasks:** A malicious user could craft a task description attempting to instruct the agent to leak data or perform unauthorized actions.
-- **Dependency Poisoning:** Agents might inadvertently introduce malicious packages if they are allowed to manage dependencies without strict lockfile validation.
-- **Hallucinated Secrets:** The agent might generate and commit fake or accidental secrets, triggering alarms or creating confusion.
+- classify, plan, implement, repair, review, summarize, and interpret deterministic evidence through provider contracts;
+- propose registered tool requests inside the task scope;
+- recommend `CONTINUE`, `RETRY`, `VERIFY`, `ESCALATE`, or `COMPLETE` where the provider supports completion assessment.
 
-## Smallest Implementation Slice for the Next Task
-**Task:** Establish the foundational project structure.
-**Action:** Initialize a minimal `package.json` with basic linting (e.g., ESLint/Prettier) and a dummy test framework to enable the validation and testing steps described in this architecture. Ensure CI workflows are updated to run these new scripts, while maintaining all existing security and governance checks. No application code or dependencies beyond standard linters/testers should be added.
+### Models are not allowed to
+
+- execute raw shell or arbitrary network operations directly;
+- decide that a destructive/high-risk action is safe;
+- override a deterministic failed check;
+- read secret paths;
+- bypass task path scope;
+- merge a pull request or bypass GitHub protection.
+
+## Completion invariant
+
+`COMPLETED` is reachable only from `VERIFYING`. The orchestrator checks every required deterministic result immediately before completion. If any required result is not `PASS`, `COMPLETE` from Jev is explicitly rejected and the run moves to bounded repair or escalation.
+
+## Recovery and idempotency
+
+- Run state writes use temp-file + atomic rename.
+- Events/evidence append rather than overwrite.
+- Each model tool request carries an idempotency key. A resumed run skips a previously executed key and records that decision.
+- Existing file content is backed up before replacement/deletion under ignored `.ade-recovery/<run-id>/`.
+- Retries and action steps are bounded in configuration.
+
+## Security risks retained for production
+
+Prompt injection, malicious dependency proposals, provider compromise, remote-worker drift, and credential handling remain operational risks. Deterministic policy narrows their effect but does not eliminate them. See `docs/SECURITY_MODEL.md` and `docs/PRODUCTION_READINESS.md`.

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.ade/
+.ade-demo/
+.ade-recovery/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+config.txt
+.DS_Store

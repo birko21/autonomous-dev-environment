@@ -91,6 +91,10 @@ jobs:
         if: ${{ hashFiles('package.json') != '' }}
         run: npm test
 
+      - name: Security checks
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm run security
+
       - name: Build
         if: ${{ hashFiles('package.json') != '' }}
         run: npm run build
