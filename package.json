@@ -1,0 +1,35 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "This repository serves as an autonomous software-development environment. It is designed so that AI agents, such as Jules, can operate securely and effectively by following strict instructions and governance rules before making any changes.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "build": "echo 'No build step yet'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/birko21/autonomous-dev-environment.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/birko21/autonomous-dev-environment/issues"
+  },
+  "homepage": "https://github.com/birko21/autonomous-dev-environment#readme",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "jest": "^30.5.2",
+    "typescript": "^7.0.2"
+  }
+}
